@@ -1,61 +1,57 @@
 #!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
+# Shell script compatibility wrapper for /sbin/logread
+#
 # Copyright (C) 2019 Dirk Brenken <dev@brenken.org>
-# A tail -f wrapper in shell to read syslog messages
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+count=
+pattern=
+follow=
+help=
+
+while getopts "l:e:fh" OPTION
+do
+	case $OPTION in
+		l) count=$OPTARG;;
+		e) pattern=$OPTARG;;
+		f) follow="-f";;
+		h) help=1;;
+		*) echo "Unsupported option $OPTION"
+		usage;;
+	esac
+done
 
 logfile="/var/log/messages"
 
 if [ ! -f "${logfile}" ]
 then
-	printf "%s\n" "Error: logfile not found!"
+	echo "Error: logfile not found!"
 	exit 2
 fi
 
 usage()
 {
-	printf "%s\n" "Usage: logread [options]"
-	printf "%s\n" "Options:"
-	printf "%5s %-10s%s\n" "-l" "<count>" "Got only the last 'count' messages"
-	printf "%5s %-10s%s\n" "-e" "<pattern>" "Filter messages with a regexp"
-	printf "%5s %-10s%s\n" "-f" "" "Follow log messages"
-	printf "%5s %-10s%s\n" "-h" "" "Print this help message"
+	echo "Usage: logread [options]"
+	echo "Options:"
+	echo " -l <count>   Got only the last 'count' messages"
+	echo " -e <pattern> Filter messages with a regexp"
+	echo " -f           Follow log messages"
+	echo " -h           Print this help message"
+	exit 1
 }
 
-if [ -z "${1}" ]
-then
-	cat "${logfile}"
-	exit 0
+[ -n "$help" ] && usage
+
+# if no count and follow then print from beginning
+[ -z "$count$follow" ] && count="+1"
+# if no count but follow then print only new lines
+[ -z "$count" ] && count="0"
+
+# shellcheck disable=SC2086
+if [ -z "$pattern" ]; then
+	echo tail -n "$count" $follow "$logfile"
+	busybox tail -n "$count" $follow "$logfile"
 else
-	while [ "${1}" ]
-	do
-		case "${1}" in
-			-l)
-				shift
-				count="${1//[^0-9]/}"
-				tail -n "${count:-50}" "${logfile}"
-				exit 0
-				;;
-			-e)
-				shift
-				pattern="${1}"
-				grep -E "${pattern}" "${logfile}"
-				exit 0
-				;;
-			-f)
-				tail -f "${logfile}"
-				exit 0
-				;;
-			-fe)
-				shift
-				pattern="${1}"
-				tail -f "${logfile}" | grep -E "${pattern}"
-				exit 0
-				;;
-			-h|*)
-				usage
-				exit 1
-				;;
-		esac
-		shift
-	done
+	echo tail -n "$count" $follow "$logfile" | grep -E "$pattern"
+	busybox tail -n "$count" $follow "$logfile" | grep -E "$pattern"
 fi
